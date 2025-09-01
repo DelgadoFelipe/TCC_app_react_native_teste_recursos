@@ -1,6 +1,9 @@
 import React, {useState, useEffect} from 'react';
-import {View, Text, Dimensions, TouchableOpacity, FlatList, Image} from 'react-native';
+import {View, Text, Dimensions, TouchableOpacity, FlatList, Image, Alert} from 'react-native';
 import {getDBConnection, createTable, dropTable, getItems, insertItem, deleteItens} from '../../base/database.js';
+import { check, PERMISSIONS, request, RESULTS } from 'react-native-permissions';
+import Geolocation from 'react-native-geolocation-service';
+import { TextInput } from 'react-native-paper';
 
 type ResultRequest = {
     next: string,
@@ -25,6 +28,9 @@ const LoadView = () => {
 
     const [data, setData] = useState<RequestDetails[]>([]);
     const [loading, setLoading] = useState(false);
+    const [latitude, setLatitude] = useState(0);
+    const [longitude, setLongitude] = useState(0);
+    const [watchId, setWatchId] = useState(0);
 
     useEffect(() => {
         (async() => {
@@ -109,6 +115,66 @@ const LoadView = () => {
         setLoading(false);
     }
 
+    const onGps = async() => {
+        check(PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION).then((statuses) => {
+            const status = statuses;
+
+            if (status != "granted") {
+                request(PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION)
+                    .then((result) =>{
+                        Alert.alert("Permissão: " + result)
+                    })
+            }
+            else {
+                getPosition()
+            }
+            console.log('testeStatus: ' + status)
+
+        })            //Checa as permissões de notificação,
+
+    }
+
+    const getPosition = async() => {
+        
+        const watchId = Geolocation.watchPosition(
+                        (position) => {
+                            console.log('latitude/longitude: ' + position.coords.latitude + ' / ' + position.coords.longitude)
+                            setLatitude(position.coords.latitude);
+                            setLongitude(position.coords.longitude);
+                        },
+                        error => {
+                            console.error(error);
+                        },
+
+                        {
+                            accuracy: {
+                                android: "high",
+                                ios: "best",
+                            },
+                            enableHighAccuracy: true, 
+                            distanceFilter: 0, 
+                            interval: 5000,
+                            fastestInterval: 50000,
+                            forceLocationManager: false,
+                            showLocationDialog: true,
+                            useSignificantChanges: false,
+                            showsBackgroundLocationIndicator: true,
+                        }
+        )
+
+        setWatchId(watchId);
+        
+    }
+
+    const stopGps = () => {
+        if (watchId) {
+            Geolocation.clearWatch(watchId);
+            setLatitude(0);
+            setLongitude(0);
+            setWatchId(0);
+        }
+    }
+
     const renderItem = ({item}: {item: RequestDetails}) => {
         return(
             <View style={{width: width * 0.88, height: height * 0.16, borderRadius: width * 0.02, marginTop: height * 0.02, padding: width * 0.035, display: 'flex', flexDirection: 'row', backgroundColor: '#d5d5d5ff', justifyContent: 'space-between'}}>
@@ -124,12 +190,33 @@ const LoadView = () => {
     return (
         <View style={{width: width, height: height}}>
             <View style={{width: width, height: height * 0.4, justifyContent: 'center', alignItems: 'center'}}>
+                {watchId > 0 ? (
+                    <View style={{alignItems: 'center', justifyContent: 'center'}}>
+                        <TextInput
+                            mode="flat" 
+                            label="Coordenadas"
+                            value={latitude + ", " + longitude}
+                            theme={{ colors: { primary: "#0048FF" } }}
+                            disabled={true}
+                            style={{width: width * 0.7, height: height * 0.08, backgroundColor: '#fff', marginTop: height * 0.02}}
+                        />
+                        
+                        <TouchableOpacity style={{backgroundColor: '#fff', width: width * 0.53, height: height * 0.075, marginTop: height * 0.02, borderRadius: width * 0.02, alignItems: 'center', justifyContent: 'center', borderWidth: width * 0.006, borderColor: '#009be8ff'}} onPress={() => stopGps()}>
+                            <Text style={{fontSize: width * 0.047, color: '#404040ff'}}>Desligar GPS</Text>
+                        </TouchableOpacity>
+                    </View>
+                ):(
+                    <TouchableOpacity style={{backgroundColor: '#fff', width: width * 0.53, height: height * 0.075, marginTop: height * 0.02, borderRadius: width * 0.02, alignItems: 'center', justifyContent: 'center', borderWidth: width * 0.006, borderColor: '#009be8ff'}} onPress={() => onGps()}>
+                        <Text style={{fontSize: width * 0.047, color: '#404040ff'}}>Ligar GPS</Text>
+                    </TouchableOpacity>
+                )}
+                
                 {loading ? (
-                    <TouchableOpacity style={{backgroundColor: '#0048FF', width: width * 0.53, height: height * 0.075, borderRadius: width * 0.02, alignItems: 'center', justifyContent: 'center', borderWidth: width * 0.006, borderColor: '#fff'}} onPress={() => loadData()}>
+                    <TouchableOpacity style={{backgroundColor: '#0048FF', width: width * 0.53, height: height * 0.075, borderRadius: width * 0.02, alignItems: 'center', marginTop: height * 0.02, justifyContent: 'center', borderWidth: width * 0.006, borderColor: '#fff'}} onPress={() => loadData()}>
                         <Text style={{fontSize: width * 0.047, color: '#fff'}}>...</Text>
                     </TouchableOpacity>
                 ):(
-                    <TouchableOpacity style={{backgroundColor: '#fff', width: width * 0.53, height: height * 0.075, borderRadius: width * 0.02, alignItems: 'center', justifyContent: 'center', borderWidth: width * 0.006, borderColor: '#0048FF'}} onPress={() => loadData()}>
+                    <TouchableOpacity style={{backgroundColor: '#fff', width: width * 0.53, height: height * 0.075, borderRadius: width * 0.02, marginTop: height * 0.02, alignItems: 'center', justifyContent: 'center', borderWidth: width * 0.006, borderColor: '#0048FF'}} onPress={() => loadData()}>
                         <Text style={{fontSize: width * 0.047, color: '#404040ff'}}>Carregar dados</Text>
                     </TouchableOpacity>
                 )}
